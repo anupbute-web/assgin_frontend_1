@@ -70,24 +70,36 @@ function App() {
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
+    // let maxsize = 128*1024;
+    // if(file.size > maxsize){
+    //   alert("File must be less than 128kb");
+    //   e.target.value = "";
+    //   return;
+    // }
     const reader = new FileReader();
     reader.onloadend = () => setNewPostImage(reader.result);
     if (file) reader.readAsDataURL(file);
   };
 
   const createPost = async () => {
-    if (!newPostText && !newPostImage) return;
-    const res = await axios.post(
-      `${API_URL}/posts`,
-      { text: newPostText, image: newPostImage },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    setPosts([res.data, ...posts]);
-    setNewPostText("");
-    setNewPostImage("");
-    setShowCreateModal(false);
+    try {
+      if (!newPostText && !newPostImage) return;
+      const res = await axios.post(
+        `${API_URL}/posts`,
+        { text: newPostText, image: newPostImage },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      console.log(res)
+      setPosts([res.data, ...posts]);
+      setNewPostText("");
+      setNewPostImage("");
+      setShowCreateModal(false);
+    } catch (err) {
+      console.log(err);
+      alert(err.response?.data?.message || "File size too large")
+    }
   };
 
   const handleLike = async (postId) => {
@@ -281,6 +293,7 @@ function App() {
               onChange={(e) => setNewPostText(e.target.value)}
             />
             <input type="file" accept="image/*" onChange={handleImageUpload} />
+            <h5>Choose file upto 128kb</h5>
             {newPostImage && (
               <img src={newPostImage} alt="Preview" className="preview-img" />
             )}
