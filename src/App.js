@@ -3,7 +3,16 @@ import axios from "axios";
 import "./App.css";
 
 const API_URL = "https://assgin-backend-1.onrender.com/api";
+const health_check = "https://assgin-backend-1.onrender.com";
 
+  async function healthCheck() {
+      try {
+          const response = await fetch(health_check);
+          console.log(response.success?'running':'error');
+      } catch (error) {
+          console.error( error);
+      }
+  }
 function App() {
   const [user, setUser] = useState(JSON.parse(localStorage.getItem("user")) || null);
   const [token, setToken] = useState(localStorage.getItem("token") || null);
@@ -25,19 +34,6 @@ function App() {
   const [newPostImage, setNewPostImage] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [commentInputs, setCommentInputs] = useState({});
-  const health_check = "https://assgin-backend-1.onrender.com";
-
-  async function healthCheck() {
-      try {
-          const response = await fetch(health_check);
-          console.log(response?'running':'error');
-      } catch (error) {
-          console.error( error);
-      }
-  }
-
-  healthCheck();
-  setInterval(healthCheck, 20_000);
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -379,5 +375,8 @@ function App() {
     </div>
   );
 }
+
+  healthCheck();
+  setInterval(healthCheck, 20_000);
 
 export default App;
