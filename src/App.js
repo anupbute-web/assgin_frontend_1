@@ -5,49 +5,43 @@ import "./App.css";
 const API_URL = "http://localhost:5000/api";
 
 function App() {
-  const [user, setUser] = useState(
-    JSON.parse(localStorage.getItem("user")) || null,
-  );
+  const [user, setUser] = useState(JSON.parse(localStorage.getItem("user")) || null);
   const [token, setToken] = useState(localStorage.getItem("token") || null);
 
+  // Auth States
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [isLoginView, setIsLoginView] = useState(true);
+  
+  // Pagination States
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
 
+  // Feed States
   const [posts, setPosts] = useState([]);
   const [newPostText, setNewPostText] = useState("");
   const [newPostImage, setNewPostImage] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [commentInputs, setCommentInputs] = useState({});
 
-  useEffect(() => {
-    if (token) fetchPosts();
-  }, [token]);
-
   const handleAuth = async (e) => {
     e.preventDefault();
     try {
       if (isLoginView) {
-        const res = await axios.post(`${API_URL}/auth/login`, {
-          email,
-          password,
-        });
+        const res = await axios.post(`${API_URL}/auth/login`, { email, password });
         localStorage.setItem("token", res.data.token);
         localStorage.setItem("user", JSON.stringify(res.data.user));
         setToken(res.data.token);
         setUser(res.data.user);
       } else {
-        await axios.post(`${API_URL}/auth/signup`, {
-          username,
-          email,
-          password,
-        });
+        await axios.post(`${API_URL}/auth/signup`, { username, email, password });
         setIsLoginView(true);
         alert("Signup successful! Please login.");
       }
     } catch (err) {
-      alert(err.response?.data?.message || "Error occurred");
+      alert(err.response?.data?.message || "Error occurred during authentication");
     }
   };
 
@@ -55,76 +49,114 @@ function App() {
     localStorage.clear();
     setToken(null);
     setUser(null);
+    setPosts([]);
   };
 
-  const fetchPosts = async () => {
+  const fetchPosts = async (pageNumber = 1) => {
+    if (loading) return;
+    setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}/posts`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await axios.get(`${API_URL}/posts?page=${pageNumber}&limit=3`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      setPosts(res.data);
+
+      // Safe fallback: Agar backend direct array bhej raha hai ya object, dono handle ho jayenge
+      const fetchedPosts = res.data.posts || (Array.isArray(res.data) ? res.data : []);
+      // Safe hasMore check
+      const moreAvailable = res.data.hasMore !== undefined ? res.data.hasMore : fetchedPosts.length === 5;
+
+      if (pageNumber === 1) {
+        setPosts(fetchedPosts);
+      } else {
+        setPosts((prev) => [...(prev || []), ...fetchedPosts]);
+      }
+
+      setHasMore(moreAvailable);
+      setPage(pageNumber);
     } catch (err) {
-      console.error("Failed to fetch posts:", err);
+      console.error("Fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Single useEffect for initial load
+  useEffect(() => {
+    if (token) {
+      fetchPosts(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  const handleLoadMore = () => {
+    if (!loading && hasMore) {
+      fetchPosts(page + 1);
     }
   };
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
-    // let maxsize = 128*1024;
-    // if(file.size > maxsize){
-    //   alert("File must be less than 128kb");
-    //   e.target.value = "";
-    //   return;
-    // }
+    if (!file) return;
+
+    let maxsize = 128 * 1024; // 128kb limit
+    if (file.size > maxsize) {
+      alert("File must be less than 128kb");
+      e.target.value = "";
+      return;
+    }
     const reader = new FileReader();
     reader.onloadend = () => setNewPostImage(reader.result);
-    if (file) reader.readAsDataURL(file);
+    reader.readAsDataURL(file);
   };
 
   const createPost = async () => {
     try {
-      if (!newPostText && !newPostImage) return;
+      if (!newPostText && !newPostImage) return alert("Please add text or an image.");
+      
       const res = await axios.post(
         `${API_URL}/posts`,
         { text: newPostText, image: newPostImage },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-      console.log(res)
-      setPosts([res.data, ...posts]);
+      
+      // Naya post direct UI me sabse upar add karo
+      setPosts((prev) => [res.data, ...(prev || [])]);
       setNewPostText("");
       setNewPostImage("");
       setShowCreateModal(false);
     } catch (err) {
-      console.log(err);
-      alert(err.response?.data?.message || "File size too large")
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to create post. File size might be too large.");
     }
   };
 
   const handleLike = async (postId) => {
-    const res = await axios.post(
-      `${API_URL}/posts/${postId}/like`,
-      {},
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    setPosts(posts.map((p) => (p._id === postId ? res.data : p)));
+    try {
+      const res = await axios.post(
+        `${API_URL}/posts/${postId}/like`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setPosts((prev) => prev.map((p) => (p._id === postId ? res.data : p)));
+    } catch (err) {
+      console.error("Like error:", err);
+    }
   };
 
   const handleComment = async (postId) => {
     const text = commentInputs[postId];
     if (!text) return;
-    const res = await axios.post(
-      `${API_URL}/posts/${postId}/comment`,
-      { text },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    setPosts(posts.map((p) => (p._id === postId ? res.data : p)));
-    setCommentInputs({ ...commentInputs, [postId]: "" });
+    try {
+      const res = await axios.post(
+        `${API_URL}/posts/${postId}/comment`,
+        { text },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setPosts((prev) => prev.map((p) => (p._id === postId ? res.data : p)));
+      setCommentInputs({ ...commentInputs, [postId]: "" });
+    } catch (err) {
+      console.error("Comment error:", err);
+    }
   };
 
   if (!user) {
@@ -157,10 +189,7 @@ function App() {
               {isLoginView ? "Login" : "Sign Up"}
             </button>
           </form>
-          <p
-            onClick={() => setIsLoginView(!isLoginView)}
-            className="toggle-auth"
-          >
+          <p onClick={() => setIsLoginView(!isLoginView)} className="toggle-auth">
             {isLoginView
               ? "New here? Create an account"
               : "Already have an account? Login"}
@@ -182,13 +211,14 @@ function App() {
 
       {/* Main Feed Container */}
       <div className="feed-container">
-        {posts.map((post) => (
+        {/* Optional chaining lagayi hai taaki array undefined hone pe app crash na ho */}
+        {(posts || []).map((post) => (
           <div key={post._id} className="post-card">
-            {/* Post Header matching screenshot */}
+            {/* Post Header */}
             <div className="post-header">
               <div className="user-info-section">
                 <div className="avatar">
-                  {post.username.charAt(0).toUpperCase()}
+                  {post.username ? post.username.charAt(0).toUpperCase() : "U"}
                 </div>
                 <div className="user-meta">
                   <div className="name-row">
@@ -198,10 +228,10 @@ function App() {
                   </div>
                   <div className="handle-row">
                     <span className="handle">
-                      @{post.username.toLowerCase()}
+                      @{post.username ? post.username.toLowerCase() : "user"}
                     </span>
                     <span className="dot">•</span>
-                    <span className="time">1 hour ago</span>
+                    <span className="time">Just now</span>
                   </div>
                 </div>
               </div>
@@ -227,20 +257,20 @@ function App() {
               )}
             </div>
 
-            {/* Action Bar matching screenshot */}
+            {/* Action Bar */}
             <div className="post-actions">
               <div
-                className={`action-btn ${post.likes.includes(user.username) ? "liked" : ""}`}
+                className={`action-btn ${(post.likes || []).includes(user.username) ? "liked" : ""}`}
                 onClick={() => handleLike(post._id)}
               >
                 <span className="icon">
-                  {post.likes.includes(user.username) ? "❤️" : "🤍"}
+                  {(post.likes || []).includes(user.username) ? "❤️" : "🤍"}
                 </span>
-                <span className="count">{post.likes.length}</span>
+                <span className="count">{(post.likes || []).length}</span>
               </div>
               <div className="action-btn">
                 <span className="icon">💬</span>
-                <span className="count">{post.comments.length}</span>
+                <span className="count">{(post.comments || []).length}</span>
               </div>
               <div className="action-btn">
                 <span className="icon">🔗</span>
@@ -249,7 +279,7 @@ function App() {
             </div>
 
             {/* Comments Section */}
-            {post.comments.length > 0 && (
+            {(post.comments || []).length > 0 && (
               <div className="comments-section">
                 {post.comments.map((c, i) => (
                   <div key={i} className="comment-item">
@@ -275,9 +305,29 @@ function App() {
             </div>
           </div>
         ))}
+
+        {/* Load More Button */}
+        {hasMore && posts && posts.length > 0 && (
+          <div style={{ textAlign: "center", margin: "20px 0" }}>
+            <button
+              onClick={handleLoadMore}
+              disabled={loading}
+              className="primary-btn"
+              style={{ width: "auto", padding: "10px 24px", borderRadius: "24px" }}
+            >
+              {loading ? "Loading..." : "Load More"}
+            </button>
+          </div>
+        )}
+        
+        {!hasMore && posts && posts.length > 0 && (
+          <p style={{ textAlign: "center", color: "var(--text-secondary)", margin: "20px 0" }}>
+            Sabhi posts dekh liye!
+          </p>
+        )}
       </div>
 
-      {/* Floating Action Button (FAB) for Creating Post */}
+      {/* Floating Action Button (FAB) */}
       <button className="fab" onClick={() => setShowCreateModal(true)}>
         +
       </button>
@@ -293,11 +343,13 @@ function App() {
               onChange={(e) => setNewPostText(e.target.value)}
             />
             <input type="file" accept="image/*" onChange={handleImageUpload} />
-            <h5>Choose file upto 128kb</h5>
+            <h5 style={{ marginTop: '8px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>
+              Choose file up to 128kb
+            </h5>
             {newPostImage && (
-              <img src={newPostImage} alt="Preview" className="preview-img" />
+              <img src={newPostImage} alt="Preview" className="preview-img" style={{ marginTop: '12px' }} />
             )}
-            <div className="modal-actions">
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
               <button
                 className="cancel-btn"
                 onClick={() => setShowCreateModal(false)}
