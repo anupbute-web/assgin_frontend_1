@@ -25,11 +25,11 @@ function App() {
   const [newPostImage, setNewPostImage] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [commentInputs, setCommentInputs] = useState({});
-  const API_URL = "https://assgin-backend-1.onrender.com";
+  const health_check = "https://assgin-backend-1.onrender.com";
 
   async function healthCheck() {
       try {
-          const response = await fetch(API_URL);
+          const response = await fetch(health_check);
           console.log(response?'running':'error');
       } catch (error) {
           console.error( error);
