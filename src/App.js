@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import "./App.css";
 
-const API_URL = "http://localhost:5000/api";
+const API_URL = "https://assgin-backend-1.onrender.com/api";
 
 function App() {
   const [user, setUser] = useState(JSON.parse(localStorage.getItem("user")) || null);
@@ -25,6 +25,19 @@ function App() {
   const [newPostImage, setNewPostImage] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [commentInputs, setCommentInputs] = useState({});
+  const API_URL = "https://assgin-backend-1.onrender.com";
+
+  async function healthCheck() {
+      try {
+          const response = await fetch(API_URL);
+          console.log(response?'running':'error');
+      } catch (error) {
+          console.error( error);
+      }
+  }
+
+  healthCheck();
+  setInterval(healthCheck, 20_000);
 
   const handleAuth = async (e) => {
     e.preventDefault();
